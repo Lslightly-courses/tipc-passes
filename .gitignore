@@ -3,3 +3,6 @@ build/*
 *.bc
 *.irpass
 .vscode
+
+# clangd
+.cache
