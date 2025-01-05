@@ -46,3 +46,17 @@ def test_interval(name: str):
     exp_ir, exp_analysis_result = get_ir_and_analysis_result(exp_path)
     assert res_ir == exp_ir # judge ir is equal
     assert res_analysis_result == exp_analysis_result # judge by set equality because the order of analysis result may be different
+
+def get_ints_set(file: str) -> Set[int]:
+    with open(file) as f:
+        line = f.readline()
+        return set(map(int, line.split(',')))
+
+@pytest.mark.parametrize("name", discover_tests())
+def test_ints(name: str):
+    proc = subprocess.run(f"./runirpass.sh {name} debug", shell=True, cwd=TEST_DIR, timeout=5)
+    if proc.returncode != 0:
+        raise Exception(f"runirpass.sh {name} debug failed")
+    res_path = os.path.join(TEST_DIR, "_debug/ints.txt")
+    exp_path = os.path.join(TEST_DIR, name+".ints.txt")
+    assert get_ints_set(res_path) == get_ints_set(exp_path)
