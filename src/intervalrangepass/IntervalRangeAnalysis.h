@@ -19,7 +19,10 @@ namespace rangeanalysis {
 struct IntervalRangeAnalysis : public FunctionPass {
   static char ID;
 
-  IntervalRangeAnalysis() : FunctionPass(ID) {}
+  IntervalRangeAnalysis() : FunctionPass(ID) {
+    knownInts.insert(minf);
+    knownInts.insert(pinf);
+  }
 
   bool runOnFunction(Function& f) override;
   void collectInts(Instruction* i);
