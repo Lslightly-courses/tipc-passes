@@ -126,7 +126,7 @@ Perhaps the most relevant documentation for this project is the tutorial [Writin
 
 There is lots of great general advice about using LLVM available:
   * https://www.cs.cornell.edu/~asampson/blog/llvm.html
-  * the [LLVM Programmer's Manual(http://llvm.org/docs/ProgrammersManual.html) is a key resource
+  * the [LLVM Programmer's Manual](http://llvm.org/docs/ProgrammersManual.html) is a key resource
   * someone once told me to just use a search engine to find the LLVM APIs and its a standard use case for me, e.g., I don't remember where the docs are I just search for `llvm irbuilder`
 
 
