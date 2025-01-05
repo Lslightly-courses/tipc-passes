@@ -1,4 +1,9 @@
 #include <list>
+#include <llvm-14/llvm/ADT/STLExtras.h>
+#include <llvm-14/llvm/ADT/StringExtras.h>
+#include <llvm/Support/FormatVariadic.h>
+#include <llvm/Support/FileSystem.h>
+#include <system_error>
 
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Instruction.h"
@@ -58,12 +63,44 @@ getInterval(Value *V, StateMap state) {
   return result;
 }
 
+void IntervalRangeAnalysis::collectInts(Instruction* i) {
+  for (int idx=0; idx < i->getNumOperands(); idx++) {
+    if (ConstantInt* ci = dyn_cast<ConstantInt>(i->getOperand(idx))) {
+      knownInts.insert(ci->getSExtValue());
+    }
+  }
+}
+
 // For an analysis pass, runOnFunction should perform the actual analysis and
 // compute the results. The actual output, however, is produced separately.
 bool
 IntervalRangeAnalysis::runOnFunction(Function& F) {
   StateMap state;
   std::list<llvm::Instruction*> w; 
+
+  // Initialize known ints in F
+  for (auto& bb : F) {
+    for (auto&& i: bb) {
+      if (isSupported(i)) {
+        collectInts(&i);
+      }
+    }
+  }
+
+  if (IntervalRangeDebug) { // print ints
+    std::error_code ec;
+    auto s = llvm::formatv("_debug/ints.txt");
+    raw_fd_ostream ints(s.str(), ec, sys::fs::OF_Text);
+    if (ec) {
+      errs() << "ERROR: " << ec.message() << "\n";
+      return false;
+    }
+    std::set<std::string> strSet;
+    llvm::transform(knownInts, std::inserter(strSet, strSet.end()), [](int i) { return std::to_string(i); });
+    ints << llvm::join(strSet, ",");
+    ints << "\n";
+    ints.close();
+  }
 
   // Initialize the state and worklist for supported instructions
   for (BasicBlock& bb : F) {
@@ -76,7 +113,15 @@ IntervalRangeAnalysis::runOnFunction(Function& F) {
   }
 
   if (IntervalRangeDebug) {
-    errs() << "DEBUG: initial interval range state for function " << F << "\n";
+    std::error_code ec;
+    auto s = llvm::formatv("_debug/mem2reg/{0}.ll", F.getName().str());
+    raw_fd_ostream ir(s.str(), ec);
+    if (ec) {
+      errs() << "ERROR: " << ec.message() << "\n";
+      return false;
+    }
+    ir << "DEBUG: initial interval range state for function\n" << F << "\n";
+    ir.close();
     for (auto& pair : state) {
       std::string is = str(pair.second);
       errs() << "-->" << *pair.first << " = " << is << "\n";

@@ -5,6 +5,8 @@
 #include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
+#include <llvm-14/llvm/IR/Constants.h>
+#include <set>
 
 #include "Interval.h"
 
@@ -20,6 +22,9 @@ struct IntervalRangeAnalysis : public FunctionPass {
   IntervalRangeAnalysis() : FunctionPass(ID) {}
 
   bool runOnFunction(Function& f) override;
+  void collectInts(Instruction* i);
+
+  std::set<int> knownInts;
 };
 
 }  // namespace rangeanalysis
