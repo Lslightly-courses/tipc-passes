@@ -3,6 +3,9 @@ project(tip-function-passes)
 # minimum required CMAKE version
 CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
 
+# clangd
+set(CMAKE_EXPORT_COMPILE_COMMANDS on)
+
 # Required packages
 find_package(PkgConfig REQUIRED)
 
