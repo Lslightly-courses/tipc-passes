@@ -1,6 +1,7 @@
 #pragma once
 
 #include <limits>
+#include <set>
 #include <string>
 
 /* Integer intervals 
@@ -51,5 +52,14 @@ bool operator!=(Interval l, Interval r);
 
 // Produce a printable representation of an interval
 std::string str(Interval i);
+
+/**
+ * @brief widen `in` with `knownInts`
+ * 
+ * @param in 
+ * @param knownInts 
+ * @return Interval 
+ */
+Interval widen(Interval in, std::set<int> &knownInts);
 
 } // end namespace interval

@@ -138,3 +138,21 @@ bool interval::operator!=(Interval l, Interval r) {
   return !(l == r);
 }
 
+Interval widen(Interval in, std::set<int> &knownInts) {
+  int new_left = pinf;
+  int new_right = minf;
+  
+  for (auto iter = knownInts.rbegin(); iter != knownInts.rend(); iter++) {
+    if (*iter <= lower(in)) {
+      new_left = *iter;
+      break;
+    }
+  }
+  for (auto i: knownInts) {
+    if (i >= upper(in)) {
+      new_right = i;
+      break;
+    }
+  }
+  return make(new_left, new_right);
+}
