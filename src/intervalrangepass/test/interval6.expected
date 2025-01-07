@@ -1,0 +1,30 @@
+*** interval range analysis for function define i64 @_tip_main() {
+entry:
+  %addtmp = add i64 7, 1
+  br label %header1
+
+header1:                                          ; preds = %body1, %entry
+  %y.0 = phi i64 [ 0, %entry ], [ %addtmp5, %body1 ]
+  %x.0 = phi i64 [ %addtmp, %entry ], [ %addtmp3, %body1 ]
+  %0 = call i64 @_tip_input()
+  %loopcond = icmp ne i64 %0, 0
+  br i1 %loopcond, label %body1, label %exit1
+
+body1:                                            ; preds = %header1
+  %addtmp3 = add i64 7, 1
+  %addtmp5 = add i64 %y.0, 1
+  br label %header1
+
+exit1:                                            ; preds = %header1
+  call void @llvm.donothing()
+  ret i64 %x.0
+}
+ ***
+  %addtmp = add i64 7, 1 = [8,8]
+  %0 = call i64 @_tip_input() = [-inf,+inf]
+  %addtmp3 = add i64 7, 1 = [8,8]
+  %y.0 = phi i64 [ 0, %entry ], [ %addtmp5, %body1 ] = [0,+inf]
+  call void @llvm.donothing() = [-inf,+inf]
+  %x.0 = phi i64 [ %addtmp, %entry ], [ %addtmp3, %body1 ] = [8,8]
+  %addtmp5 = add i64 %y.0, 1 = [1,+inf]
+  %loopcond = icmp ne i64 %0, 0 = [0,1]
