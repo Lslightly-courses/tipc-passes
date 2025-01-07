@@ -4,10 +4,6 @@
 
 1. 基于TIP语言的widening区间分析
 
-## 原始代码解读
-
-
-
 ## 实验代码简述
 
 ### widening narrowing算法框架
