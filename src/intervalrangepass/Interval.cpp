@@ -138,7 +138,7 @@ bool interval::operator!=(Interval l, Interval r) {
   return !(l == r);
 }
 
-Interval widen(Interval in, std::set<int> &knownInts) {
+Interval interval::widen(Interval in, std::set<int> &knownInts) {
   int new_left = pinf;
   int new_right = minf;
   

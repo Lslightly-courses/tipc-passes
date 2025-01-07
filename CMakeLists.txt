@@ -1,7 +1,7 @@
 project(tip-function-passes)
 
 # minimum required CMAKE version
-CMAKE_MINIMUM_REQUIRED(VERSION 3.7)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
 
 # clangd
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
@@ -43,6 +43,19 @@ message("LLVM STATUS:
 include_directories(${LLVM_INCLUDE_DIRS})
 link_directories(${LLVM_LIBRARY_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
+
+Include(FetchContent)
+
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG        v3.4.0 # or a later release
+)
+
+FetchContent_MakeAvailable(Catch2)
+list(APPEND CMAKE_MODULE_PATH ${catch2_SOURCE_DIR}/extras)
+include(CTest)
+include(Catch)
 
 ######## Tool specific rules ###########
 add_subdirectory(src)
