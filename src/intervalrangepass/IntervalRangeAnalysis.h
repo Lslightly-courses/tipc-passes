@@ -16,6 +16,9 @@ using namespace llvm;
 
 namespace rangeanalysis {
 
+// Analysis state (a map lattice)
+typedef DenseMap<Value*, Interval> StateMap;
+
 struct IntervalRangeAnalysis : public FunctionPass {
   static char ID;
 
@@ -25,7 +28,9 @@ struct IntervalRangeAnalysis : public FunctionPass {
   }
 
   bool runOnFunction(Function& f) override;
+  void runOnInst(Instruction* i, StateMap& state, Interval& current, Interval& old, bool useWiden);
   void collectInts(Instruction* i);
+  void printKnownInts(raw_fd_ostream& s);
 
   std::set<int> knownInts;
 };

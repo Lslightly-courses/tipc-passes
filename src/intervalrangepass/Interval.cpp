@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cstdlib>
 #include <set>
 #include "Interval.h"
 
@@ -91,15 +93,94 @@ Interval interval::sub(Interval l, Interval r) {
   return interval::add(l, interval::neg(r));
 }
 
+template <typename T>
+int multiply_with_overflow_check(T a, T b, std::set<T>& intSet) {
+    static_assert(std::is_integral<T>::value, "Only integral types are supported");
+
+    T result;
+    // Check for overflow or underflow based on the signs of a and b
+    if (a > 0 && b > 0) {
+        if (a > std::numeric_limits<T>::max() / b) {
+            intSet.insert(pinf);
+            return 1; // Overflow
+        }
+    } else if (a < 0 && b < 0) {
+        if (a < std::numeric_limits<T>::max() / b) {
+            intSet.insert(pinf);
+            return 1; // Overflow
+        }
+    } else if ((a > 0 && b < 0) || (a < 0 && b > 0)) {
+        if (b < std::numeric_limits<T>::min() / a) {
+            intSet.insert(minf);
+            return -1; // Underflow
+        }
+    }
+
+    // If no overflow or underflow, calculate the result
+    result = a * b;
+    intSet.insert(result);
+    return 0; // No overflow or underflow
+}
+
 /* Multiplication
  */
 Interval interval::mul(Interval l, Interval r) {
-  return interval::full();
+  if (l == empty() || r == empty() || l == full() || r == full())
+    return full();
+  std::set<int> s{};
+  multiply_with_overflow_check(lower(l), lower(r), s);
+  multiply_with_overflow_check(upper(l), lower(r), s);
+  multiply_with_overflow_check(lower(l), upper(r), s);
+  multiply_with_overflow_check(upper(l), upper(r), s);
+  int low = *std::min_element(s.begin(), s.end());
+  int high = *std::max_element(s.begin(), s.end());
+  return make(low, high);
 }
 
 /* Division
  */
 Interval interval::div(Interval l, Interval r) {
+  if (l == empty() || r == empty() || l == full() || r == full())
+    return full();
+  if (lower(r) < 0 && upper(r) > 0) { // div -1/+1
+    std::set<int> s{abs(lower(l)), abs(upper(l)), -abs(lower(l)), -abs(upper(l))};
+    return make(*std::min_element(s.begin(), s.end()), *std::max_element(s.begin(), s.end()));
+  }
+  if (lower(r) == 0 && upper(r) == 0) { // div by zero
+    return full();
+  }
+  if (lower(r) == 0) {
+    r = make(1, upper(r));
+  }
+  if (upper(r) == 0) {
+    r = make(lower(r), -1);
+  }
+  if (lower(r) >= 0) {
+    bool llowpos = lower(l) > 0;
+    bool lhighpos = upper(l) > 0;
+    if (llowpos && lhighpos) {
+      return make(lower(l) / upper(r), upper(l) / lower(r));
+    }
+    if (!llowpos && !lhighpos) {
+      return make(lower(l) / lower(r), upper(l) / upper(r));
+    }
+    if (!llowpos && lhighpos) {
+      return make(lower(l) / lower(r), upper(l) / lower(r));
+    }
+  }
+  if (upper(r) <= 0) {
+    bool llowpos = lower(l) > 0;
+    bool lhighpos = upper(l) > 0;
+    if (llowpos && lhighpos) {
+      return make(upper(l) / upper(r), lower(l) / lower(r));
+    }
+    if (!llowpos && !lhighpos) {
+      return make(upper(l) / lower(r), lower(l) / upper(r));
+    }
+    if (!llowpos && lhighpos) {
+      return make(upper(l) / upper(r), lower(l) / upper(r));
+    }
+  }
   return interval::full();
 }
 

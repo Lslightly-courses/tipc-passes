@@ -42,9 +42,6 @@ isSupported(Instruction &i) {
           isa<ICmpInst>(i));
 }
 
-// Analysis state (a map lattice)
-typedef DenseMap<Value*, Interval> StateMap;
-
 /* Produce an interval value for a value
  *   For constants generate an interval 
  *   For instructions lookup the value in the state
@@ -71,82 +68,18 @@ void IntervalRangeAnalysis::collectInts(Instruction* i) {
   }
 }
 
-// For an analysis pass, runOnFunction should perform the actual analysis and
-// compute the results. The actual output, however, is produced separately.
-bool
-IntervalRangeAnalysis::runOnFunction(Function& F) {
-  StateMap state;
-  std::list<llvm::Instruction*> w; 
-
-  // Initialize known ints in F
-  for (auto& bb : F) {
-    for (auto&& i: bb) {
-      if (isSupported(i)) {
-        collectInts(&i);
-      }
-    }
-  }
-
-  if (IntervalRangeDebug) { // print ints
-    std::error_code ec;
-    auto s = llvm::formatv("_debug/ints.txt");
-    raw_fd_ostream ints(s.str(), ec, sys::fs::OF_Text);
-    if (ec) {
-      errs() << "ERROR: " << ec.message() << "\n";
-      return false;
-    }
+void IntervalRangeAnalysis::printKnownInts(raw_fd_ostream& s) {
     std::set<std::string> strSet;
     llvm::transform(knownInts, std::inserter(strSet, strSet.end()), [](int i) { return std::to_string(i); });
-    ints << llvm::join(strSet, ",");
-    ints << "\n";
-    ints.close();
-  }
+    s << llvm::join(strSet, ",") << "\n";
+}
 
-  // Initialize the state and worklist for supported instructions
-  for (BasicBlock& bb : F) {
-    for (Instruction& i : bb) {
-      if (isSupported(i)) {
-        state[&i] = interval::empty();
-        w.push_back(&i);
-      }
-    }
-  }
-
-  if (IntervalRangeDebug) {
-    std::error_code ec;
-    auto s = llvm::formatv("_debug/mem2reg/{0}.ll", F.getName().str());
-    raw_fd_ostream ir(s.str(), ec);
-    if (ec) {
-      errs() << "ERROR: " << ec.message() << "\n";
-      return false;
-    }
-    ir << "DEBUG: initial interval range state for function\n" << F << "\n";
-    ir.close();
-    for (auto& pair : state) {
-      std::string is = str(pair.second);
-      errs() << "-->" << *pair.first << " = " << is << "\n";
-    }
-    errs() << "DEBUG: initial worklist\n";
-    for (Instruction* i : w) {
-      errs() << "-->" << *i << "\n";
-    }
-  }
-
-  // Iterate until the worklist is empty
-  while (!w.empty()) {
-    // Remove the current instruction
-    Instruction* i = w.front(); 
-    w.pop_front();
-
-    // Record prior value to control worklist insertion
-    auto old = state.lookup(i);
-    Interval current = interval::empty();
-
+void IntervalRangeAnalysis::runOnInst(Instruction* i, StateMap& state, Interval& current, Interval& old, bool useWiden) {
     // Special case handling for each supported instruction type
     if (auto* phi = dyn_cast<PHINode>(i)) {
       // merge all incoming values 
       if (IntervalRangeDebug) {
-        errs() << "DEBUG: merging values at node " << phi << "\n";
+        errs() << "DEBUG: merging values at node " << *phi << "\n";
       }
 
       for (int idx=0; idx < phi->getNumIncomingValues(); idx++) {
@@ -191,6 +124,10 @@ IntervalRangeAnalysis::runOnFunction(Function& F) {
       Interval l = getInterval(ic->getOperand(0), state);
       Interval r = getInterval(ic->getOperand(1), state);
 
+      if (IntervalRangeDebug) {
+        errs() << "DEBUG: comparing " << str(l) << " and " << str(r) << " with ";
+      }
+
       // Use comparison expression semantics 
       if (pred == llvm::CmpInst::ICMP_EQ) {
         current = eq(l,r);
@@ -217,28 +154,124 @@ IntervalRangeAnalysis::runOnFunction(Function& F) {
     if (IntervalRangeDebug) {
       errs() << "DEBUG: analyzing " << *i << "\n";
       errs() << "--> old value = " << str(old) << "\n";
-      errs() << "--> new value  =" << str(current) << "\n";
+      errs() << "--> new value = " << str(current) << "\n";
     }
 
-    // add users of this instruction to worklist only if the value has changed
-    if (old != current) {
-      state[i] = current;
-      for(User *u : i->users()) { 
-        if (Instruction* cu = dyn_cast<Instruction>(u)){
-          if (isSupported(*cu)) {
-            // If not scheduled for analysis, add this user
-            auto it = std::find(w.begin(), w.end(), cu);
-            if (it == w.end()) {
-              w.push_back(cu);
-              if (IntervalRangeDebug) {
-                errs() << "DEBUG: adding to worklist :" << *cu << "\n";
+    if (useWiden) {
+      current = widen(current, knownInts);
+      if (IntervalRangeDebug) {
+        errs() << "DEBUG: widening current with" << "\n";
+        printKnownInts(errs());
+        errs() << "--> widened value = " << str(current) << "\n";
+      }
+    }
+}
+
+// For an analysis pass, runOnFunction should perform the actual analysis and
+// compute the results. The actual output, however, is produced separately.
+bool
+IntervalRangeAnalysis::runOnFunction(Function& F) {
+  StateMap state;
+  std::list<llvm::Instruction*> w; 
+
+  // Initialize known ints in F
+  for (auto& bb : F) {
+    for (auto&& i: bb) {
+      if (isSupported(i)) {
+        collectInts(&i);
+      }
+    }
+  }
+
+  if (IntervalRangeDebug) { // print ints
+    std::error_code ec;
+    auto s = llvm::formatv("_debug/ints.txt");
+    raw_fd_ostream ints(s.str(), ec, sys::fs::OF_Text);
+    if (ec) {
+      errs() << "ERROR: " << ec.message() << "\n";
+      return false;
+    }
+    printKnownInts(ints);
+    ints.close();
+  }
+
+  // Initialize the state and worklist for supported instructions
+  for (BasicBlock& bb : F) {
+    for (Instruction& i : bb) {
+      if (isSupported(i)) {
+        state[&i] = interval::empty();
+        w.push_back(&i);
+      }
+    }
+  }
+
+  if (IntervalRangeDebug) {
+    std::error_code ec;
+    auto s = llvm::formatv("_debug/mem2reg/{0}.ll", F.getName().str());
+    raw_fd_ostream ir(s.str(), ec);
+    if (ec) {
+      errs() << "ERROR: " << ec.message() << "\n";
+      return false;
+    }
+    ir << "DEBUG: initial interval range state for function\n" << F << "\n";
+    ir.close();
+    for (auto& pair : state) {
+      std::string is = str(pair.second);
+      errs() << "-->" << *pair.first << " = " << is << "\n";
+    }
+    errs() << "DEBUG: initial worklist\n";
+    for (Instruction* i : w) {
+      errs() << "-->" << *i << "\n";
+    }
+  }
+
+  auto worklist = [&](bool useWiden){
+      // Iterate until the worklist is empty
+      while (!w.empty()) {
+        // Remove the current instruction
+        Instruction* i = w.front(); 
+        w.pop_front();
+
+        // Record prior value to control worklist insertion
+        auto old = state.lookup(i);
+        Interval current = interval::empty();
+
+        runOnInst(i, state, current, old, useWiden);
+
+        // add users of this instruction to worklist only if the value has changed
+        if (old != current) {
+          state[i] = current;
+          for(User *u : i->users()) { 
+            if (Instruction* cu = dyn_cast<Instruction>(u)){
+              if (isSupported(*cu)) {
+                // If not scheduled for analysis, add this user
+                auto it = std::find(w.begin(), w.end(), cu);
+                if (it == w.end()) {
+                  w.push_back(cu);
+                  if (IntervalRangeDebug) {
+                    errs() << "DEBUG: adding to worklist :" << *cu << "\n";
+                  }
+                }
               }
             }
-          }
-        }
-      } 
-    }     
+          } 
+        }     
+      }
+  };
+
+  // widening
+  worklist(true);
+
+  // push again the supported instructions to the worklist
+  for (BasicBlock& bb : F) {
+    for (Instruction& i : bb) {
+      if (isSupported(i)) {
+        w.push_back(&i);
+      }
+    }
   }
+  // narrowing
+  worklist(false);
 
   /* Emit the analysis information for the function 
    *   A more useful implementation would record it and make it useful
